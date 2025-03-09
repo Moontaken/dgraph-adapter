@@ -1,4 +1,4 @@
-import * as jwt from "jsonwebtoken"
+import * as jose from "jose"
 
 export interface DgraphClientParams {
   endpoint: string
@@ -55,9 +55,41 @@ export function client(params: DgraphClientParams) {
   }
 
   if (authHeader && jwtSecret) {
-    headers[authHeader] = jwt.sign({ nextAuth: true }, jwtSecret, {
-      algorithm: jwtAlgorithm,
-    })
+    const createJWT = async () => {
+      let token: string
+
+      if (jwtAlgorithm === "HS256") {
+        // For HS256, use a symmetric key
+        const secretKey = new TextEncoder().encode(jwtSecret)
+        token = await new jose.SignJWT({ nextAuth: true })
+          .setProtectedHeader({ alg: 'HS256' })
+          .sign(secretKey)
+      } else if (jwtAlgorithm === "RS256") {
+        // For RS256, the secret should be a private key
+        // Note: In a real implementation, you might need to handle PEM formatting
+        try {
+          const privateKey = await jose.importPKCS8(jwtSecret, jwtAlgorithm)
+          token = await new jose.SignJWT({ nextAuth: true })
+            .setProtectedHeader({ alg: 'RS256' })
+            .sign(privateKey)
+        } catch (error) {
+          throw new Error(`Invalid private key for RS256 algorithm: ${error.message}`)
+        }
+      } else {
+        throw new Error(`Unsupported JWT algorithm: ${jwtAlgorithm}`)
+      }
+
+      return token
+    }
+
+    // Create and set the token
+    createJWT()
+      .then(token => {
+        headers[authHeader] = token
+      })
+      .catch(error => {
+        console.error("JWT creation error:", error)
+      })
   }
 
   return {
@@ -65,6 +97,25 @@ export function client(params: DgraphClientParams) {
       query: string,
       variables?: Record<string, any>
     ): Promise<T | null> {
+      // Ensure the JWT is set before making the request if jwtSecret is provided
+      if (authHeader && jwtSecret && !headers[authHeader]) {
+        try {
+          if (jwtAlgorithm === "HS256") {
+            const secretKey = new TextEncoder().encode(jwtSecret)
+            headers[authHeader] = await new jose.SignJWT({ nextAuth: true })
+              .setProtectedHeader({ alg: 'HS256' })
+              .sign(secretKey)
+          } else if (jwtAlgorithm === "RS256") {
+            const privateKey = await jose.importPKCS8(jwtSecret, jwtAlgorithm)
+            headers[authHeader] = await new jose.SignJWT({ nextAuth: true })
+              .setProtectedHeader({ alg: 'RS256' })
+              .sign(privateKey)
+          }
+        } catch (error) {
+          console.error("JWT creation error:", error)
+        }
+      }
+
       const response = await fetch(endpoint, {
         method: "POST",
         headers,

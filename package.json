@@ -40,8 +40,8 @@
     "@types/jsonwebtoken": "^8.5.5"
   },
   "dependencies": {
-    "jsonwebtoken": "^9.0.0",
-    "@auth/core": "0.38.0"
+    "@auth/core": "0.38.0",
+    "jose": "^6.0.8"
   },
   "scripts": {
     "build": "tsc",
