@@ -17,10 +17,21 @@
 import { client as dgraphClient } from "./lib/client.js";
 import { isDate } from "@auth/core/adapters";
 import * as defaultFragments from "./lib/graphql/fragments.js";
+import jwtUtils from "./lib/jwt-utils.js";
+
 export function DgraphAdapter(client, options) {
   const c = dgraphClient(client);
   const fragments = { ...defaultFragments, ...options?.fragments };
   return {
+    graphql: c.graphql,
+    encode: async (params) => {
+      console.log('e')
+      return await jwtUtils.encode(params);
+    },
+    decode: async (params) => {
+      console.log('v')
+      return await jwtUtils.decode(params);
+    },
     async createUser(input) {
       const result = await c.run(
             /* GraphQL */ `
@@ -38,7 +49,7 @@ export function DgraphAdapter(client, options) {
     async getUser(id) {
       const result = await c.run(
             /* GraphQL */ `
-          query ($id: ID!) {
+          query ($id: String!) {
             getUser(id: $id) {
               ...UserFragment
             }
